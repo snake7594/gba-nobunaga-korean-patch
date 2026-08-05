@@ -9,8 +9,8 @@ import os, sys, json, struct, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 from hangul_codec import Codec, TABLE, CLS, SYM_CODE, FREE_SLOTS, GAIJI0, enc_len
-from bdf import load_bdf, render12
 from plan import build_plan
+from glyphs import GlyphMaker, pack18, patch_advance, ADV_PATCH_OFF, ADV_PATCH_ORIG
 from collections import Counter
 
 SRC = paths.rom_jp()
@@ -18,6 +18,10 @@ DST = paths.rom_kr()
 FONT2 = paths.FONT_BASE
 FREE_BASE = paths.FREE_BASE
 ROM_END = paths.ROM_SIZE
+
+# 전각 전진폭(px). 12 = 원본, 8 = 좁은 글꼴로 창 넘침 해소.
+# 환경변수 NOBU2_ADVANCE 로 덮어쓸 수 있다.
+ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "8"))
 
 # ---- 주입 계획 (verify_all.py 와 동일한 판단을 쓰기 위해 plan.py 로 분리)
 final, skipped, NO_RELOC, problems, by_off, es = build_plan()
@@ -57,39 +61,37 @@ codec = Codec(charmap)
 
 # ---- ROM 준비 + 폰트 기록
 rom = bytearray(open(SRC, "rb").read())
-glyphs, fbbx, ascent, descent = load_bdf(paths.font())
-YSHIFT = 3
 
-def hangul_rows(ch):
-    r = render12(glyphs, ascent, ord(ch), W=12, H=16)
-    if r is None: return None
-    rows = r[YSHIFT:YSHIFT+12]
-    l, rgt = 12, -1
-    for v in rows:
-        for x in range(12):
-            if (v >> (11-x)) & 1:
-                l = min(l, x); rgt = max(rgt, x)
-    if rgt >= 0:
-        w = rgt - l + 1
-        shift = (12 - w)//2 - l
-        if shift > 0: rows = [v >> shift for v in rows]
-        elif shift < 0: rows = [(v << (-shift)) & 0xFFF for v in rows]
-    return rows
+gm = GlyphMaker(advance=ADVANCE, rom=rom)
+print(f"전각 전진폭 {ADVANCE}px · 폰트 {gm.font_name} · 정렬 {gm.align}")
 
-def pack18(rows):
-    bits = 0
-    for v in rows: bits = (bits << 12) | (v & 0xFFF)
-    return bits.to_bytes(18, "big")
+nfont = nsym = ngai = 0
 
-nfont = 0
+# 한글 음절
 for s, slot in charmap.items():
-    rows = hangul_rows(s)
-    if rows is None:
-        raise SystemExit(f"갈무리에 없는 음절: {s}")
-    off = FONT2 + slot*18
-    rom[off:off+18] = pack18(rows)
+    rom[FONT2+slot*18: FONT2+slot*18+18] = pack18(gm.hangul(s))
     nfont += 1
-print("font glyphs written:", nfont)
+
+if ADVANCE < 12:
+    # 전진폭을 줄이면 원본 12px 글리프(기호·전각숫자·영문·외자)가 다음 글자에
+    # 덮여 오른쪽이 잘린다. 그래서 이들도 전진폭 안에 들어오도록 다시 그린다.
+    for slot in range(len(TABLE)):
+        if slot in charmap.values():
+            continue
+        if CLS[slot] == "sym":
+            v = TABLE[slot]
+            ch = bytes([v >> 8, v & 0xFF]).decode("cp932")
+            rom[FONT2+slot*18: FONT2+slot*18+18] = pack18(gm.symbol(ch, slot))
+            nsym += 1
+        elif CLS[slot] == "gaiji":
+            rom[FONT2+slot*18: FONT2+slot*18+18] = pack18(gm.gaiji(slot))
+            ngai += 1
+
+    # 전각 전진폭 코드 패치 (1바이트)
+    patch_advance(rom, ADVANCE)
+    print(f"code patch: {ADV_PATCH_OFF:#x} {ADV_PATCH_ORIG} -> {ADVANCE}")
+
+print(f"font glyphs written: 한글 {nfont}, 기호 {nsym}, 외자 {ngai}")
 
 # ---- 텍스트 기록
 free_ptr = FREE_BASE
