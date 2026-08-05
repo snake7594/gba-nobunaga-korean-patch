@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """DB 고정 필드에 쓴 한글이 원문보다 길어 다음 필드를 침범할 위험이 없는지 점검"""
+import os, sys
+import paths
 import json, os, sys, struct
 from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hangul_codec import Codec, enc_len
 
 S = os.path.dirname(os.path.abspath(__file__))
-OLD = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba", "rb").read()
-NEW = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Korean).gba", "rb").read()
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+OLD = open(paths.rom_jp(), "rb").read()
+NEW = open(paths.rom_kr(), "rb").read()
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 by_off = {e["off"]: e for e in es}
 
 # 실제로 새 바이트가 원문 문자열 길이를 넘어선 필드 찾기

@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 """번역 검증 v2 — 실제 주입 실패 요인만 검사"""
+import os, sys
+import paths
 import json, os, sys, re
 from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from hangul_codec import SYM_CODE, enc_len, TABLE
 
 S = os.path.dirname(os.path.abspath(__file__))
-U = json.load(open(S+r"\units2.json", encoding="utf-8"))
-tr = json.load(open(S+r"\tr_merged.json", encoding="utf-8"))
+U = json.load(open(paths.inp('units2.json'), encoding="utf-8"))
+tr = json.load(open(paths.inp('tr_merged.json'), encoding="utf-8"))
 TSET = set(TABLE)
 
 FMT = re.compile(r"%[-0-9]*[sd]")
@@ -73,6 +75,6 @@ for i in issues:
     if i["type"] in ("badchar","jp-remains"):
         allbad.update(i["chars"])
 print("chars:", dict(allbad))
-json.dump(issues, open(S+r"\issues.json","w",encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(issues, open(paths.out('issues.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=1)
 for i in issues[:25]:
     print(" ", i["type"], i.get("chars",""), repr(i["jp"][:26]), "->", repr(i["ko"][:36]))

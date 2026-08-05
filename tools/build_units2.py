@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """번역 단위 v2: 포인터 배열 -> 시퀀스 재구성, 필드 노이즈 제거"""
+import os, sys
+import paths
 import json, os, sys, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eumdok import KANJI_READ, KANJI_SKIP
 from hangul_codec import enc_len
 
 S = os.path.dirname(os.path.abspath(__file__))
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 by_off = {e["off"]: e for e in es}
 
 GA = re.compile(r"\{G\d\d\}")
@@ -112,7 +114,7 @@ json.dump({"auto": {str(k): v for k, v in auto.items()},
            "keep": keep_offs,
            "solo": list(solo_units.values()),
            "seq": seq_units},
-          open(S+r"\units2.json","w",encoding="utf-8"), ensure_ascii=False, indent=0)
+          open(paths.out('units2.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=0)
 print("saved units2.json")
 
 # 시퀀스 샘플

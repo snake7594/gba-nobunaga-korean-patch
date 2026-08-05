@@ -1,4 +1,5 @@
 # 게임 롬·세이브는 절대 커밋하지 않습니다
+rom/
 *.gba
 *.sav
 *.sgm
@@ -6,14 +7,9 @@
 *.zip
 *.7z
 
-# 작업 중간 산출물
-tr_batches/
-tr_out/
-*.bin
-issues.json
-tr_errors.json
-verify_mismatch.json
-truncated.json
-overflow.json
+# 빌드 산출물
+build/
+
+# 파이썬
 __pycache__/
 *.pyc

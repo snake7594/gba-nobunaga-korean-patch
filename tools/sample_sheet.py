@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 """최종 샘플 시트: 원문 일본어를 키로 찾아 현재 유효 주소를 추적해 렌더"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, json, os, sys
 from PIL import Image, ImageDraw
 
 S = os.path.dirname(os.path.abspath(__file__))
-NEW = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Korean).gba", "rb").read()
+NEW = open(paths.rom_kr(), "rb").read()
 FONT2 = 0x305274; ASCII_F = 0x304df4
 TB2 = 0x30d6ce; N2 = 1869
 table = [struct.unpack_from("<H", NEW, TB2+i*2)[0] for i in range(N2)]
 idx_of = {v: i for i, v in enumerate(table)}
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 by_jp = {}
 for e in es:
     by_jp.setdefault(e["jp"], e)
@@ -74,5 +77,5 @@ for ln in rows:
         x += 13
     y += 15
 img = img.resize((W*3, H*3), Image.NEAREST)
-img.save(S+r"\sample_korean.png")
+img.save(paths.out('sample_korean.png'))
 print("saved sample_korean.png", img.size)

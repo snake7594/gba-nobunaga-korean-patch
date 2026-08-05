@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 """코드 영역(0..0x62000) 변경분이 전부 '의도한 포인터 갱신'인지 확인"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, json, os
 S = os.path.dirname(os.path.abspath(__file__))
-OLD = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba", "rb").read()
-NEW = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Korean).gba", "rb").read()
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+OLD = open(paths.rom_jp(), "rb").read()
+NEW = open(paths.rom_kr(), "rb").read()
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 
 intended = set()          # 포인터 슬롯 주소 (4바이트)
 str_span = set()          # 문자열 본문이 차지하는 바이트

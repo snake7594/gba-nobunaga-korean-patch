@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
 """패치 ROM 검증: 게임 로직대로 디코드 + 글리프 렌더"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, sys, os, json
 from PIL import Image
 
 S = os.path.dirname(os.path.abspath(__file__))
-ROM = r"D:\gba\NOBU2\Nobunaga no Yabou (Korean).gba"
+ROM = paths.rom_kr()
 rom = open(ROM, "rb").read()
 FONT2 = 0x305274
 TB2 = 0x30d6ce; N2 = 1869
 table = [struct.unpack_from("<H", rom, TB2+i*2)[0] for i in range(N2)]
 idx_of = {v: i for i, v in enumerate(table)}
-charmap = json.load(open(S+r"\charmap.json", encoding="utf-8"))
+charmap = json.load(open(paths.inp('charmap.json'), encoding="utf-8"))
 slot2syl = {v: k for k, v in charmap.items()}
 
 def decode_at(off, maxb=4096):
@@ -68,7 +71,7 @@ def draw(offsets, name, scale=3):
             x += 13
         y += 15
     img = img.resize((W*scale, H*scale), Image.NEAREST)
-    img.save(S+"\\"+name); print("saved", name)
+    img.save(paths.out(name)); print("saved", name)
 
 if __name__ == "__main__":
     if sys.argv[1] == "text":

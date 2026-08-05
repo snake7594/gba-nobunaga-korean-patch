@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """갈무리11 12px 한글 렌더 미리보기 (주입 전 품질 확인)"""
 import os, sys
+import paths
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bdf import load_bdf, render12
 from PIL import Image
 
 S = os.path.dirname(os.path.abspath(__file__))
-glyphs, fbbx, ascent, descent = load_bdf(S+r"\Galmuri11.bdf")
+glyphs, fbbx, ascent, descent = load_bdf(paths.font())
 YSHIFT = 3
 
 def rows_for(ch):
@@ -49,7 +51,7 @@ for li, line in enumerate(lines):
                 if (rows[y] >> (11-x)) & 1:
                     img.putpixel((2+ci*13+x, 2+li*15+y), 0)
 img = img.resize((W*3, H*3), Image.NEAREST)
-img.save(S+r"\font_preview.png")
+img.save(paths.out('font_preview.png'))
 print("saved font_preview.png; missing:", missing)
 
 # 전체 한글 음절 커버리지 확인

@@ -5,108 +5,32 @@
 3) 폰트 슬롯에 갈무리11 글리프 기록
 4) 텍스트 인코딩 & 기록 (제자리 or 재배치+포인터 갱신)
 """
-import json, os, sys, struct, re
+import os, sys, json, struct, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 from hangul_codec import Codec, TABLE, CLS, SYM_CODE, FREE_SLOTS, GAIJI0, enc_len
 from bdf import load_bdf, render12
+from plan import build_plan
 from collections import Counter
 
-S = os.path.dirname(os.path.abspath(__file__))
-SRC = r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba"
-DST = r"D:\gba\NOBU2\Nobunaga no Yabou (Korean).gba"
-FONT2 = 0x305274
-FREE_BASE = 0x33a1a0   # 여유 공간 시작
-ROM_END = 0x400000
+SRC = paths.rom_jp()
+DST = paths.rom_kr()
+FONT2 = paths.FONT_BASE
+FREE_BASE = paths.FREE_BASE
+ROM_END = paths.ROM_SIZE
 
-U = json.load(open(S+r"\units2.json", encoding="utf-8"))
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
-by_off = {e["off"]: e for e in es}
-tr = json.load(open(S+r"\tr_merged.json", encoding="utf-8"))
+# ---- 주입 계획 (verify_all.py 와 동일한 판단을 쓰기 위해 plan.py 로 분리)
+final, skipped, NO_RELOC, problems, by_off, es = build_plan()
 
-# ---- 오프셋별 최종 텍스트 결정
-final = {}   # off -> ko text (None = 원본 유지)
-problems = []
-
-for off_s, ko in U["auto"].items():
-    final[int(off_s)] = ko
-for off in U["keep"]:
-    final[off] = None
-
-for u in U["solo"]:
-    r = tr.get(u["jp"])
-    if r is None or "ko" not in r:
-        problems.append(("missing", u["jp"][:30])); continue
-    for off in u["offs"]:
-        final[off] = r["ko"]
-
-for k, sq in enumerate(U["seq"]):
-    r = tr.get(f"seq{k}")
-    if r is None or "kos" not in r or len(r["kos"]) != len(sq["offs"]):
-        problems.append(("seq-bad", f"seq{k}")); continue
-    for off, ko in zip(sq["offs"], r["kos"]):
-        final[off] = ko
-
-# ---- 안전 처리
-# (a) 리터럴풀/포인터배열로 확인되지 않은 참조 -> 포인터를 고쳐선 안 됨(재배치 금지).
-#     단 제자리 기록은 포인터를 건드리지 않으므로 안전하다.
-try:
-    NO_RELOC = set(json.load(open(S+r"\unsafe_offsets.json")))
-except FileNotFoundError:
-    NO_RELOC = set()
-
-# (b) 겹치는 엔트리: 검증된 포인터 참조 > 참조 없음 > 미검증 참조, 동급이면 긴 쪽
-def rank(e):
-    unverified = e["off"] in NO_RELOC
-    if unverified:      tier = 2
-    elif e["refs"]:     tier = 0    # 진짜 포인터가 가리키는 문자열
-    else:               tier = 1
-    return (tier, -e["blen"], e["off"])
-ranked = sorted(es, key=rank)
-taken, drop_overlap = [], set()
-occupied = []
-for e in ranked:
-    a, b = e["off"], e["off"] + e["blen"]
-    if any(a < ob and oa < b for oa, ob in occupied):
-        drop_overlap.add(e["off"])
-    else:
-        occupied.append((a, b))
-for o in drop_overlap:
-    final.pop(o, None)
-print(f"overlap drops: {len(drop_overlap)}, no-reloc entries: {len(NO_RELOC)}")
-
+nskip = Counter(skipped.values())
+print(f"overlap drops: {nskip.get('overlap', 0)}, unencodable(원본 유지): {nskip.get('unencodable', 0)}, "
+      f"no-reloc entries: {len(NO_RELOC)}")
 print("final offsets:", len(final), " problems:", len(problems))
 for p in problems[:20]: print("  !", p)
 if problems:
-    json.dump(problems, open(S+r"\inject_problems.json","w",encoding="utf-8"), ensure_ascii=False)
-
-# ---- 번역문에 남은 일본 문자 / 인코딩 불가 문자가 있으면 원문 유지
-# (해당 한자·가나 슬롯은 한글로 재활용되므로 그대로 두면 엉뚱한 글자로 표시됨)
-from hangul_codec import normalize as _norm
-_TSET = set(TABLE)
-def encodable(t):
-    for ch in re.sub(r"\{G\d\d\}", "", _norm(t)):
-        o = ord(ch)
-        if ch == "\n" or o < 0x80: continue
-        if 0xAC00 <= o <= 0xD7A3: continue
-        if ch in SYM_CODE: continue           # 유지 기호(・ー 포함)
-        if 0xFF61 <= o <= 0xFF9F: continue    # 반각 가나(원본 바이트 보존)
-        if 0x3041 <= o <= 0x30FF or 0x4E00 <= o <= 0x9FFF:
-            return False                      # 재활용된 슬롯 -> 사용 불가
-        try:
-            b = ch.encode("cp932")
-            if len(b) == 2 and ((b[0] << 8) | b[1]) in _TSET: continue
-        except Exception: pass
-        return False
-    return True
-
-unencodable = []
-for off in list(final):
-    ko = final[off]
-    if ko and not encodable(ko):
-        unencodable.append((hex(off), by_off[off]["jp"][:30], ko[:30]))
-        final[off] = None
-print("unencodable -> kept original:", len(unencodable))
-for u in unencodable[:10]: print("   ", u)
+    json.dump(problems, open(paths.out('inject_problems.json'), "w", encoding="utf-8"), ensure_ascii=False)
+json.dump({hex(k): v for k, v in sorted(skipped.items())},
+          open(paths.out('skipped.json'), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 # ---- 음절 수집
 syls = Counter()
@@ -128,12 +52,12 @@ rest = sorted([s for s in syls if s not in set(top)])
 charmap = {}
 for s, slot in zip(top, hira_slots): charmap[s] = slot
 for s, slot in zip(rest, other_slots): charmap[s] = slot
-json.dump(charmap, open(S+r"\charmap.json","w",encoding="utf-8"), ensure_ascii=False, indent=0)
+json.dump(charmap, open(paths.out('charmap.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=0)
 codec = Codec(charmap)
 
 # ---- ROM 준비 + 폰트 기록
 rom = bytearray(open(SRC, "rb").read())
-glyphs, fbbx, ascent, descent = load_bdf(S+r"\Galmuri11.bdf")
+glyphs, fbbx, ascent, descent = load_bdf(paths.font())
 YSHIFT = 3
 
 def hangul_rows(ch):
@@ -222,11 +146,11 @@ for off, ko in sorted(final.items()):
 
 print(f"inplace: {inplace}, relocated: {relocated}, truncated: {len(truncated)}, overflow: {len(overflow)}")
 if truncated:
-    json.dump(truncated, open(S+r"\truncated.json","w",encoding="utf-8"), ensure_ascii=False, indent=1)
+    json.dump(truncated, open(paths.out('truncated.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=1)
     for t in truncated[:12]: print("   TRUNC", t["off"], repr(t["ko"][:28]), "->", repr(t["cut"][:28]))
 print(f"free space used: {free_ptr - FREE_BASE} bytes ({free_ptr:#x})")
 if overflow:
-    json.dump(overflow, open(S+r"\overflow.json","w",encoding="utf-8"), ensure_ascii=False, indent=1)
+    json.dump(overflow, open(paths.out('overflow.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=1)
     print("overflow saved -> overflow.json")
 
 open(DST, "wb").write(rom)

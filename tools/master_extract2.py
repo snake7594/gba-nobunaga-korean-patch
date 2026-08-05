@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """마스터 문자열 DB v2 — 가이지 {Gnn} 토큰화, 유효성 강화"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, json
-rom = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba","rb").read()
-S = r"C:\Users\Jay\AppData\Local\Temp\claude\D--gba-NOBU2\880e59fe-50f8-4f05-9587-2cbaf5132883\scratchpad"
+rom = open(paths.rom_jp(), "rb").read()
+S = paths.BUILD
 LIMIT = 0x33a200
 
 TB2 = 0x30d6ce; N2 = 1869
@@ -107,6 +110,6 @@ nl = [e for e in entries if "\n" in e["jp"]]
 print("strings with newline:", len(nl))
 fmt = [e for e in entries if "%" in e["jp"]]
 print("strings with %fmt:", len(fmt))
-json.dump(entries, open(S+r"\master_strings.json","w",encoding="utf-8"), ensure_ascii=False, indent=0)
+json.dump(entries, open(paths.out('master_strings.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=0)
 print("saved")
 for e in gaiji_strs[:5]: print("G:", hex(e["off"]), repr(e["jp"][:40]))

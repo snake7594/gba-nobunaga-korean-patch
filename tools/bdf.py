@@ -1,4 +1,7 @@
 """Minimal BDF parser -> dict[codepoint] = (bbx_w,bbx_h,xoff,yoff,dwidth,rows[list of int])"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 def load_bdf(path):
     glyphs = {}
     with open(path, "r", encoding="utf-8", errors="replace") as f:
@@ -51,7 +54,7 @@ def render12(glyphs, ascent, cp, W=12, H=12, baseline=None):
 
 if __name__ == "__main__":
     import sys
-    g, fb, asc, dsc = load_bdf(r"C:\Users\Jay\AppData\Local\Temp\claude\D--gba-NOBU2\880e59fe-50f8-4f05-9587-2cbaf5132883\scratchpad\Galmuri11.bdf")
+    g, fb, asc, dsc = load_bdf(paths.font())
     print("glyphs:", len(g), "fbbx:", fb, "ascent:", asc, "descent:", dsc)
     for ch in "신장왕카건베ㄴㅅ가":
         r = render12(g, asc, ord(ch))

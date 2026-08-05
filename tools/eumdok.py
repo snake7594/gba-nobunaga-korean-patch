@@ -2,6 +2,9 @@
 """한자 -> 한국어 독음(본음) 매핑. 노부나가의 야망 GBA 폰트 1633자 대상.
 국자(國字, 일본 고유 한자)나 독음이 없는 글자는 대상에서 제외(원본 글리프 유지)."""
 
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 PAIRS = """
 阿아 愛애 挨애 茜천 悪악 握악 芦로 圧압 斡알 扱급 安안 庵암 暗암 案안 闇암 以이 伊이 位위 依의 囲위
 夷이 委위 威위 惟유 意의 易역 為위 畏외 異이 移이 衣의 謂위 違위 遺유 医의 井정 域역 育육 磯기 一일
@@ -122,7 +125,7 @@ KATA_READ = {
 
 if __name__ == "__main__":
     print("kanji readings:", len(KANJI_READ))
-    kl = open(r"C:\Users\Jay\AppData\Local\Temp\claude\D--gba-NOBU2\880e59fe-50f8-4f05-9587-2cbaf5132883\scratchpad\kanji_list.txt", encoding="utf-8").read().strip()
+    kl = open(paths.inp('kanji_list.txt'), encoding="utf-8").read().strip()
     missing = [c for c in kl if c not in KANJI_READ and c not in KANJI_SKIP]
     extra = [c for c in KANJI_READ if c not in kl]
     print("font kanji:", len(kl))

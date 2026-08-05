@@ -4,11 +4,14 @@
  (b) ARM    LDR Rd,[PC,#imm12]   가 그 주소를 가리키는가
  (c) 포인터 배열의 일원인가 (이웃 워드도 0x08xxxxxx 유효 포인터)
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, json, os
 S = os.path.dirname(os.path.abspath(__file__))
-OLD = open(r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba", "rb").read()
+OLD = open(paths.rom_jp(), "rb").read()
 LIMIT = 0x33a200
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 
 def thumb_pool(ref, back=1200):
     lo = max(0, ref - back)
@@ -57,5 +60,5 @@ for e in targets:
 
 print("ref classification:", stats)
 print("entries with unverified refs:", len(unsafe))
-json.dump([u["off"] for u in unsafe], open(S+r"\unsafe_offsets.json","w"), indent=0)
+json.dump([u["off"] for u in unsafe], open(paths.out('unsafe_offsets.json'), "w"), indent=0)
 for u in unsafe[:20]: print("  ", hex(u["off"]), u["bad_refs"], repr(u["jp"][:30]))

@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 """tr_out/*.json 병합 -> tr_merged.json, 누락 배치 보고"""
-import json, os, glob, sys
+import os, sys, json, glob
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 
-S = os.path.dirname(os.path.abspath(__file__))
-nb = len(glob.glob(S+r"\tr_batches\batch_*.json"))
+nb = len(glob.glob(paths.inp('tr_batches/batch_*.json')))
 merged = {}
 missing_files = []
 bad = []
-paths = [S + rf"\tr_out\batch_{k:03d}.json" for k in range(nb)]
-if os.path.exists(S + r"\tr_out\batch_fix.json"):
-    paths.append(S + r"\tr_out\batch_fix.json")
-for k, p in enumerate(paths):
+files = [paths.inp(f'tr_out/batch_{k:03d}.json') for k in range(nb)]
+if os.path.exists(paths.inp('tr_out/batch_fix.json')):
+    files.append(paths.inp('tr_out/batch_fix.json'))
+for k, p in enumerate(files):
     if not os.path.exists(p):
         missing_files.append(k); continue
     try:
@@ -25,7 +26,7 @@ for k, p in enumerate(paths):
         elif "ko" in it: merged[key] = {"ko": it["ko"]}
 
 # 기대 키 대비 누락
-U = json.load(open(S+r"\units2.json", encoding="utf-8"))
+U = json.load(open(paths.inp('units2.json'), encoding="utf-8"))
 want = set(u["jp"] for u in U["solo"]) | set(f"seq{k}" for k in range(len(U["seq"])))
 have = set(merged)
 missing_keys = want - have
@@ -33,7 +34,7 @@ missing_keys = want - have
 print(f"batches: {nb}, missing files: {len(missing_files)} {missing_files[:20]}")
 print(f"bad json: {bad}")
 print(f"keys merged: {len(have)} / expected {len(want)}, missing keys: {len(missing_keys)}")
-json.dump(merged, open(S+r"\tr_merged.json","w",encoding="utf-8"), ensure_ascii=False, indent=0)
-json.dump(sorted(missing_keys), open(S+r"\tr_missing_keys.json","w",encoding="utf-8"), ensure_ascii=False, indent=0)
+json.dump(merged, open(paths.out('tr_merged.json'), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+json.dump(sorted(missing_keys), open(paths.out('tr_missing_keys.json'), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
 print("saved tr_merged.json")
 for k in list(missing_keys)[:15]: print("  missing:", repr(k[:40]))

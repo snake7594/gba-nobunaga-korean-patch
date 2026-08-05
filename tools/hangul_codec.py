@@ -4,10 +4,13 @@
 - 한글 음절: 한자/히라가나/가타카나 슬롯에 배정 (charmap.json)
 - ASCII(반각)·개행: 1바이트 그대로
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import paths
 import struct, json, os, re
 
 S = os.path.dirname(os.path.abspath(__file__))
-ROM_SRC = r"D:\gba\NOBU2\Nobunaga no Yabou (Japan).gba"
+ROM_SRC = paths.rom_jp()
 
 TB2 = 0x30d6ce
 N2 = 1869

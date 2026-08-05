@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """번역 배치 + 글로서리 생성"""
+import os, sys
+import paths
 import json, os, sys, glob
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eumdok import KANJI_READ
 
 S = os.path.dirname(os.path.abspath(__file__))
-U = json.load(open(S+r"\units2.json", encoding="utf-8"))
-es = json.load(open(S+r"\master_strings.json", encoding="utf-8"))
+U = json.load(open(paths.inp('units2.json'), encoding="utf-8"))
+es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 by_off = {e["off"]: e for e in es}
 
 # 물리적 이웃 문자열(문맥용)
@@ -39,10 +41,10 @@ for it in items:
         batches.append(cur); cur, cost = [], 0
 if cur: batches.append(cur)
 
-os.makedirs(S+r"\tr_batches", exist_ok=True)
-for f in glob.glob(S+r"\tr_batches\*.json"): os.remove(f)
+os.makedirs(paths.out('tr_batches'), exist_ok=True)
+for f in glob.glob(paths.out('tr_batches/*.json')): os.remove(f)
 for k, b in enumerate(batches):
-    json.dump(b, open(S+rf"\tr_batches\batch_{k:03d}.json","w",encoding="utf-8"), ensure_ascii=False, indent=1)
+    json.dump(b, open(paths.out(f'tr_batches/batch_{k:03d}.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=1)
 print("batches:", len(batches), " items:", len(items))
 
 # 글로서리
@@ -74,5 +76,5 @@ gloss = {
     "닉":"익","님":"임",
   },
 }
-json.dump(gloss, open(S+r"\glossary.json","w",encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(gloss, open(paths.out('glossary.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=1)
 print("glossary saved")
