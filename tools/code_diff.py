@@ -4,14 +4,26 @@ import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 import struct, json, os
-from glyphs import ADV_PATCH_OFF
+from glyphs import ADV_SITES_FULL, ADV_SITES_HALF
+import logo_patch
+import imgtext
 S = os.path.dirname(os.path.abspath(__file__))
 OLD = open(paths.rom_jp(), "rb").read()
 NEW = open(paths.rom_kr(), "rb").read()
 es = json.load(open(paths.inp('master_strings.json'), encoding="utf-8"))
 
-# 의도한 코드 패치: 전각 전진폭 (glyphs.patch_advance)
-CODE_PATCH = {ADV_PATCH_OFF}
+# 의도한 코드 패치: 전각·반각 전진폭 6곳 (glyphs.patch_advance)
+CODE_PATCH = set(ADV_SITES_FULL) | set(ADV_SITES_HALF)
+
+# 의도한 그림 패치: 타이틀 로고 타일 + 이미지 라벨(버튼·상태창·합전 명령)
+GFX = set()
+for _s, _e, _base in logo_patch.SEGMENTS:
+    GFX.update(range(_base, _base + (_e - _s)*64))
+for _a in imgtext.ARRAYS:
+    _offs = _a.get("offs") or [_a["base"] + k*_a["stride"] for k in range(_a["n"])]
+    _nb = (_a["w"]*16)//64*32
+    for _k in _a["items"]:
+        GFX.update(range(_offs[_k], _offs[_k] + _nb))
 
 intended = set()          # 포인터 슬롯 주소 (4바이트)
 str_span = set()          # 문자열 본문이 차지하는 바이트
@@ -29,8 +41,9 @@ print("changed 4-byte words in code region:", len(changed_words))
 
 unexpected = [a for a in changed_words
               if a not in intended and not any((a+d) in str_span for d in range(4))
-              and not any((a+d) in CODE_PATCH for d in range(4))]
-print("unexpected (neither pointer slot nor intended code patch nor inside a string):",
+              and not any((a+d) in CODE_PATCH for d in range(4))
+              and not any((a+d) in GFX for d in range(4))]
+print("설명 안 되는 4바이트 워드(포인터·의도한 코드/그림 패치·문자열 제외):",
       len(unexpected))
 for a in unexpected[:20]:
     print(f"  {a:#08x}: {OLD[a:a+4].hex()} -> {NEW[a:a+4].hex()}")
@@ -51,18 +64,20 @@ print("invalid updated pointers:", bad)
 # 코드 영역 전체에서 '포인터도 문자열도 아닌' 변경 바이트
 partial = [a for a in range(CODE_END)
            if NEW[a] != OLD[a] and (a & ~3) not in intended and a not in str_span
-           and a not in CODE_PATCH]
-print("changed bytes that are neither pointer nor intended patch nor string:", len(partial))
+           and a not in CODE_PATCH and a not in GFX]
+print("설명 안 되는 변경 바이트(코드 영역):", len(partial))
 for a in partial[:20]: print(f"   {a:#08x}: {OLD[a]:02x} -> {NEW[a]:02x}")
 for a in sorted(CODE_PATCH):
     if NEW[a] != OLD[a]:
-        print(f"   [의도한 코드 패치] {a:#08x}: {OLD[a]:02x} -> {NEW[a]:02x} (전각 전진폭)")
+        kind = "전각" if a in ADV_SITES_FULL else "반각"
+        print(f"   [의도한 코드 패치] {a:#08x}: {OLD[a]:02x} -> {NEW[a]:02x} ({kind} 전진폭)")
 
 # ROM 전체에 대해서도 동일 검사 (폰트/여유공간 제외)
 FONT_LO, FONT_HI = 0x304df4, 0x30d604
 FREE_LO = 0x33a1a0
 glob = [a for a in range(len(OLD))
         if NEW[a] != OLD[a] and (a & ~3) not in intended and a not in str_span
-        and not (FONT_LO <= a < FONT_HI) and a < FREE_LO and a not in CODE_PATCH]
-print("global unexplained changed bytes:", len(glob))
+        and not (FONT_LO <= a < FONT_HI) and a < FREE_LO
+        and a not in CODE_PATCH and a not in GFX]
+print("설명 안 되는 변경 바이트(롬 전체):", len(glob))
 for a in glob[:20]: print(f"   {a:#08x}: {OLD[a]:02x} -> {NEW[a]:02x}")

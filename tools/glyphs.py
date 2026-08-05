@@ -64,21 +64,23 @@ class GlyphMaker:
         return [(bits >> (144 - 12*(y+1))) & 0xFFF for y in range(12)]
 
     @staticmethod
-    def squeeze8(rows):
-        """12px -> 8px 가로 압축. 3열을 2열로 접되 OR 로 획을 보존한다."""
+    def squeeze(rows, n=8):
+        """12px -> n px 가로 압축. 원래 열을 비례 배치하고 OR 로 획을 보존한다."""
         out = []
         for v in rows:
-            bits = [(v >> (CELL-1-x)) & 1 for x in range(CELL)]
-            nb = []
-            for g in range(4):
-                a, b, c = bits[g*3], bits[g*3+1], bits[g*3+2]
-                nb.append(a | b)
-                nb.append(b | c)
+            nb = [0]*n
+            for x in range(CELL):
+                if (v >> (CELL-1-x)) & 1:
+                    nb[min(n-1, x*n//CELL)] = 1
             nv = 0
-            for x in range(8):
+            for x in range(n):
                 nv = (nv << 1) | nb[x]
-            out.append(nv << 4)      # 12비트 필드 좌측에 배치
+            out.append(nv << (CELL-n))    # 12비트 필드 좌측에 배치
         return out
+
+    @classmethod
+    def squeeze8(cls, rows):
+        return cls.squeeze(rows, 8)
 
     def from_font(self, ch):
         r = render12(self.glyphs, self.ascent, ord(ch), W=CELL, H=16)
@@ -108,14 +110,13 @@ class GlyphMaker:
             rows = self.align_rows(rows)
             if self.ink(rows)[1] < self.advance:
                 return rows
-        rows = self.squeeze8(self.orig_rows(slot))
-        return rows if self.advance >= 8 else self.align_rows(rows)
+        return self.squeeze(self.orig_rows(slot), self.advance)
 
     def gaiji(self, slot):
         """게임 전용 외자 — 어떤 한자인지 확정할 수 없으므로 원본을 압축해 보존"""
         if self.advance >= CELL:
             return self.orig_rows(slot)
-        return self.squeeze8(self.orig_rows(slot))
+        return self.squeeze(self.orig_rows(slot), self.advance)
 
 
 def pack18(rows):
@@ -126,16 +127,31 @@ def pack18(rows):
 
 
 # ---- 전진폭 코드 패치 ----
-# 0x08003EAC: adds r6,#0xc   (전각 전진 12px)   halfword = 0x360C, imm 은 하위 바이트
-ADV_PATCH_OFF = 0x3EAC
+# 글자 폭은 세 군데에서 따로 쓰인다. 하나만 고치면 그리기와 자리 계산이 어긋나
+# 이름이 엉뚱한 위치에서 시작하거나 창 밖으로 밀린다. 전부 같은 값으로 맞춘다.
+#   0x08003EAC  adds r6,#0xc  그리기 루프 — 전각 전진
+#   0x08003EE4  adds r6,#8    그리기 루프 — 반각(1바이트) 전진
+#   0x08000AE6  adds r3,#0xc  strwidth() — 전각    (가운데맞춤·오른쪽맞춤에 쓰임)
+#   0x08000AEC  adds r3,#8    strwidth() — 반각
+#   0x08000B20  adds r1,#0xc  줄 수 계산 — 전각
+#   0x08000B2E  adds r1,#8    줄 수 계산 — 반각
+ADV_SITES_FULL = (0x3EAC, 0x0AE6, 0x0B20)
+ADV_SITES_HALF = (0x3EE4, 0x0AEC, 0x0B2E)
+ADV_PATCH_OFF = ADV_SITES_FULL[0]
 ADV_PATCH_ORIG = 0x0C
 
 
-def patch_advance(rom, advance):
-    """전각 전진폭을 바꾼다. rom 은 bytearray."""
-    if rom[ADV_PATCH_OFF] != ADV_PATCH_ORIG:
-        raise ValueError(f"{ADV_PATCH_OFF:#x} 가 예상과 다릅니다: {rom[ADV_PATCH_OFF]:#04x}")
+def patch_advance(rom, advance, half=None):
+    """전각·반각 전진폭을 여섯 군데 모두 같은 값으로 바꾼다. rom 은 bytearray."""
     if not (1 <= advance <= 255):
         raise ValueError("advance 범위 오류")
-    rom[ADV_PATCH_OFF] = advance
+    half = advance if half is None else half
+    for off in ADV_SITES_FULL:
+        if rom[off] not in (0x0C, advance):
+            raise ValueError(f"{off:#x} 가 예상과 다릅니다: {rom[off]:#04x}")
+        rom[off] = advance
+    for off in ADV_SITES_HALF:
+        if rom[off] not in (0x08, half):
+            raise ValueError(f"{off:#x} 가 예상과 다릅니다: {rom[off]:#04x}")
+        rom[off] = half
     return rom

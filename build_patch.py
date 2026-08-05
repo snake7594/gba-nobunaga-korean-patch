@@ -19,7 +19,10 @@ PY = sys.executable
 
 def run(script, optional=False):
     print(f"\n{'='*60}\n▶ {script}\n{'='*60}")
-    r = subprocess.run([PY, os.path.join(TOOLS, script)], cwd=ROOT)
+    # 윈도우 기본 콘솔 코드페이지(cp949)로는 한글 로그의 일부 문자를 못 찍고
+    # UnicodeEncodeError 로 빌드가 멈춘다. 자식 프로세스는 UTF-8 로 고정한다.
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
+    r = subprocess.run([PY, os.path.join(TOOLS, script)], cwd=ROOT, env=env)
     if r.returncode != 0:
         if optional:
             print(f"[경고] {script} 가 0이 아닌 코드로 종료했습니다 (계속 진행)")
@@ -48,6 +51,7 @@ def main():
 
     run("inject.py")
     run("logo_patch.py")        # 타이틀 로고 이미지 한글화
+    run("imgtext.py")           # 커맨드 버튼·상태창 등 이미지 라벨 한글화
     run("verify_all.py")
     run("code_diff.py")
     run("field_check.py")

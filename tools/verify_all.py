@@ -73,7 +73,10 @@ for off, ko in final.items():
 
 print(f"주입 대조 : OK {ok} / 불일치 {bad}")
 for m in mismatches:
-    print("  ", m["off"], "->", m["cur"], "| want", repr(m["want"]), "| got", repr(m["got"]))
+    # 콘솔 인코딩이 cp949 라 일부 문자에서 죽는다. 못 찍는 글자는 이스케이프한다.
+    line = f"   {m['off']} -> {m['cur']} | want {m['want']!r} | got {m['got']!r}"
+    print(line.encode(sys.stdout.encoding or "utf-8", "backslashreplace")
+              .decode(sys.stdout.encoding or "utf-8", "replace"))
 json.dump(mismatches, open(paths.out('verify_mismatch.json'), "w", encoding="utf-8"),
           ensure_ascii=False, indent=1)
 

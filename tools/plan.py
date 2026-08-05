@@ -23,6 +23,12 @@ _GA = re.compile(r"\{G\d\d\}")
 # 이름·지명을 일본어 읽기로 표기할지 (0 이면 한자 독음 유지)
 JP_NAMES = os.environ.get("NOBU2_JPNAMES", "1") != "0"
 
+# 문자 전진폭(px) — inject.py 와 같은 값을 써야 줄 수 계산이 맞는다
+ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "7"))
+
+# 성+이름 명판의 안쪽 폭(px). 이보다 길어지는 이름은 성 뒤 공백을 빼서 줄인다.
+NAME_PLATE_PX = 64
+
 
 def encodable(t):
     """번역문이 게임 폰트로 표현 가능한가.
@@ -111,6 +117,22 @@ def build_plan():
         else:
             occupied.append((a, b))
 
+    # (b-2) 이미지 라벨(스프라이트 타일) 안을 문자열로 오인한 항목 제외.
+    #       그림 데이터라 텍스트를 써 넣으면 버튼·상태창 그림이 깨진다.
+    import imgtext
+    gfx = []
+    for arr in imgtext.ARRAYS:
+        offs = arr.get("offs") or [arr["base"] + k*arr["stride"]
+                                   for k in range(arr["n"])]
+        nb = (arr["w"]*16)//64*32
+        gfx += [(offs[k], offs[k]+nb) for k in arr["items"]]
+    for off in list(final):
+        e = by_off[off]
+        a, b = off, off + e["blen"] + e["slack"]
+        if any(a < gb and ga < b for ga, gb in gfx):
+            skipped[off] = "image"
+            final.pop(off)
+
     # (c) 표현 불가 문자열 -> 원본 유지
     for off in list(final):
         ko = final[off]
@@ -163,13 +185,23 @@ def apply_jp_names(final, by_off):
     def hcost(t):
         return sum(1 if (ord(c) < 0x80 or c in halfmap) else 2 for c in t)
 
-    # 4) 용량에 맞으면 적용 (넘치면 성 뒤 공백을 빼고 재시도)
+    # 4) 용량에 맞으면 적용
+    #    성 뒤 공백은 바이트가 아니라 '화면 폭' 때문에도 뺀다. 명판 안쪽은 64px 라
+    #    전진폭 7px 기준 9글자까지만 들어간다. 성+이름이 그보다 길면 공백을 뺀다.
+    #    (`이나와시로 모리쿠니` 10글자 → 70px 로 잘리던 것이 `이나와시로모리쿠니` 63px)
+    given_len = {}
+    for off, t in cand.items():
+        e = by_off[off]
+        if e["jp"] not in NAMES.SURNAME_SET:
+            given_len[off] = len(t)
     for off, t in cand.items():
         e = by_off[off]
         capn = e["blen"] + e["slack"] - 1
         use = t
-        if hcost(use) > capn and e["jp"] in NAMES.SURNAME_SET:
-            use = t.rstrip()
+        if e["jp"] in NAMES.SURNAME_SET:
+            pair = given_len.get(off + 7, 4)          # 같은 레코드의 이름 필드
+            if hcost(use) > capn or (len(t) + pair) * ADVANCE > NAME_PLATE_PX:
+                use = t.rstrip()
         if hcost(use) <= capn:
             final[off] = use
     for off, nk in body_new.items():
@@ -184,7 +216,7 @@ def apply_jp_names(final, by_off):
 _FMT = re.compile(r"%[-0-9]*[sd]")
 
 
-def _lines(t, limit, adv_full, halfmap=None):
+def _lines(t, limit, adv_full, halfmap=None, adv_half=8):
     """게임의 자동 줄바꿈 규칙으로 줄 수 계산"""
     t = _GA.sub("　", t)
     t = _FMT.sub("　　　", t)
@@ -192,14 +224,14 @@ def _lines(t, limit, adv_full, halfmap=None):
     for ch in t:
         if ch == "\n":
             n += 1; x = 0; continue
-        w = 8 if ord(ch) < 0x80 else adv_full
+        w = adv_half if ord(ch) < 0x80 else adv_full
         if x + w > limit:
             n += 1; x = 0
         x += w
     return n
 
 
-def trim_to_window(final, by_off, halfmap, advance=8):
+def trim_to_window(final, by_off, halfmap, advance=ADVANCE):
     """번역이 원문보다 줄이 늘어난 경우 원문 줄 수에 맞게 잘라낸다.
 
     포맷 코드(%s·%d)가 있는 문자열은 인자 개수가 달라지면 위험하므로 건드리지 않는다.
@@ -210,11 +242,11 @@ def trim_to_window(final, by_off, halfmap, advance=8):
             continue
         jp = by_off[off]["jp"]
         for limit in (216, 240):
-            lj = _lines(jp, limit, 12)
-            if _lines(ko, limit, advance, halfmap) <= lj:
+            lj = _lines(jp, limit, 12)                       # 원문은 전각 12·반각 8px
+            if _lines(ko, limit, advance, halfmap, advance) <= lj:
                 continue
             cut = ko
-            while cut and _lines(cut, limit, advance, halfmap) > lj:
+            while cut and _lines(cut, limit, advance, halfmap, advance) > lj:
                 # 낱말 경계에서 자르되, 안 되면 한 글자씩
                 sp = cut.rstrip().rfind(" ")
                 cut = cut[:sp] if sp > len(cut) * 0.5 else cut[:-1]
