@@ -24,10 +24,11 @@ FONT2 = paths.FONT_BASE
 FREE_BASE = paths.FREE_BASE
 ROM_END = paths.ROM_SIZE
 
-# 문자 전진폭(px). 12 = 원본. 7 = 갈무리11 Condensed 잉크 폭과 같아
-# 획을 하나도 잃지 않으면서 가장 좁게 넣을 수 있는 값 (이름 잘림 대책).
+# 문자 전진폭(px). 12 = 원본. 8 = 잉크 7px + 글자 사이 여백 1px 로,
+# 획을 잃지 않으면서 글자가 붙어 보이지 않는 가장 좁은 값.
+# 7px 로 하면 여백이 0이 되어 글자가 겹쳐 보인다.
 # 환경변수 NOBU2_ADVANCE 로 덮어쓸 수 있다.
-ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "7"))
+ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "8"))
 
 # ---- 주입 계획 (verify_all.py 와 동일한 판단을 쓰기 위해 plan.py 로 분리)
 #      이름의 일본어 읽기 치환과 반각 배정도 plan 이 결정한다.

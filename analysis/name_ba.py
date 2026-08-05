@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """이름 폭 전/후 비교 그림 — 명판 안쪽 64px 에 이름이 들어가는지 보여준다
 
-무장 DB(스트라이드 44)에서 실제로 쓰이는 성·이름을 읽어, 예전 규칙(전진 8px +
-성 뒤 공백 유지)과 새 규칙(전진 7px + 길면 공백 제거)으로 각각 그린다.
+예전 규칙(성 뒤 공백을 늘 유지)과 새 규칙(64px 를 넘으면 공백 제거)을 같은
+전진폭 8px 로 그려 비교한다. 전진 7px 는 갈무리 Condensed 잉크가 7px 라
+글자 사이 여백이 0이 되어 붙어 보이므로 쓰지 않는다.
 """
 import os, sys, json, io
 from PIL import Image, ImageDraw, ImageFont
@@ -11,6 +12,7 @@ import paths
 from bdf import load_bdf, render12
 
 PLATE = 64                      # 명판 안쪽 폭(px)
+ADV = 8                         # 문자 전진폭(px)
 SAMPLES = ["오다 노부나가", "다케다 신겐", "우에스기 겐신", "도쿠가와 이에야스",
            "이나와시로 모리쿠니", "사이토 도산", "모리 모토나리"]
 
@@ -57,13 +59,13 @@ def main():
            fill=(255, 214, 110), font=f)
     y = 38
     for t in SAMPLES:
-        short = t if len(t)*7 <= PLATE else t.replace(" ", "")
-        a = strip(t, 8, con[0], con[2])
-        b = strip(short, 7, con[0], con[2])
-        d.text((12, y), f"이전  전진 8px : {t}", fill=(220, 220, 220), font=f)
+        short = t if len(t)*ADV <= PLATE else t.replace(" ", "")
+        a = strip(t, ADV, con[0], con[2])
+        b = strip(short, ADV, con[0], con[2])
+        d.text((12, y), f"이전 : {t}", fill=(220, 220, 220), font=f)
         out.paste(a, (300, y-2))
         y += rowh
-        d.text((12, y), f"이후  전진 7px : {short}", fill=(150, 230, 150), font=f)
+        d.text((12, y), f"이후 : {short}", fill=(150, 230, 150), font=f)
         out.paste(b, (300, y-2))
         y += rowh + 18
     p = os.path.join(paths.ROOT, "images", "name_ba.png")

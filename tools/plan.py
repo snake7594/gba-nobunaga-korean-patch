@@ -24,7 +24,7 @@ _GA = re.compile(r"\{G\d\d\}")
 JP_NAMES = os.environ.get("NOBU2_JPNAMES", "1") != "0"
 
 # 문자 전진폭(px) — inject.py 와 같은 값을 써야 줄 수 계산이 맞는다
-ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "7"))
+ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "8"))
 
 # 성+이름 명판의 안쪽 폭(px). 이보다 길어지는 이름은 성 뒤 공백을 빼서 줄인다.
 NAME_PLATE_PX = 64
@@ -187,8 +187,8 @@ def apply_jp_names(final, by_off):
 
     # 4) 용량에 맞으면 적용
     #    성 뒤 공백은 바이트가 아니라 '화면 폭' 때문에도 뺀다. 명판 안쪽은 64px 라
-    #    전진폭 7px 기준 9글자까지만 들어간다. 성+이름이 그보다 길면 공백을 뺀다.
-    #    (`이나와시로 모리쿠니` 10글자 → 70px 로 잘리던 것이 `이나와시로모리쿠니` 63px)
+    #    전진폭 8px 기준 8글자까지만 들어간다. 성+이름이 그보다 길면 공백을 뺀다.
+    #    (`도쿠가와 이에야스` 9글자 → 72px 로 잘리던 것이 `도쿠가와이에야스` 64px)
     given_len = {}
     for off, t in cand.items():
         e = by_off[off]
