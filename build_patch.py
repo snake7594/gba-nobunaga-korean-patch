@@ -47,6 +47,7 @@ def main():
         run("validate2.py", optional=True)   # 경고성 리포트
 
     run("inject.py")
+    run("logo_patch.py")        # 타이틀 로고 이미지 한글화
     run("verify_all.py")
     run("code_diff.py")
     run("field_check.py")

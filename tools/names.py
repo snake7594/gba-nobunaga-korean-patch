@@ -228,7 +228,8 @@ def body_rules():
         if e and len(e) >= 2:
             add(e, r)
     # 단독으로 써도 안전한 유명 인물 이름만 예외로 허용
-    for w in FAMOUS_GIVEN:
+    # (set 순회는 해시 랜덤화로 순서가 바뀌어 결과가 달라지므로 정렬해서 돈다)
+    for w in sorted(FAMOUS_GIVEN):
         r = GIVEN.get(w)
         if not r:
             continue
