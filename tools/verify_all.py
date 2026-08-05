@@ -23,6 +23,10 @@ idx_of = {v: i for i, v in enumerate(table)}
 charmap = json.load(open(paths.inp('charmap.json'), encoding="utf-8"))
 slot2syl = {v: k for k, v in charmap.items()}
 
+final, skipped, no_reloc, problems, by_off, es, halfmap = build_plan()
+# 반각 1바이트 코드 -> 음절 (이름 필드용)
+code2syl = {c: s for s, c in halfmap.items()}
+
 
 def decode(off, maxb=4096):
     """게임과 동일한 조회 로직으로 ROM 바이트를 문자열로 되돌린다"""
@@ -30,6 +34,7 @@ def decode(off, maxb=4096):
     while i < len(NEW) and NEW[i] != 0 and i - off < maxb:
         b = NEW[i]
         if b == 0x0A: out.append("\n"); i += 1; continue
+        if b in code2syl: out.append(code2syl[b]); i += 1; continue
         if b < 0x80: out.append(chr(b)); i += 1; continue
         if 0xA1 <= b <= 0xDF:
             out.append(bytes([b]).decode("cp932")); i += 1; continue
@@ -44,8 +49,6 @@ def decode(off, maxb=4096):
         i += 2
     return "".join(out), i - off
 
-
-final, skipped, no_reloc, problems, by_off, es = build_plan()
 
 ok = bad = 0
 mismatches = []

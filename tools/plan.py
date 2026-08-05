@@ -11,12 +11,17 @@ build_plan() 반환값
     problems    [(사유, 설명)]                   번역 누락 등 진짜 문제
 """
 import os, sys, json, re
+from collections import Counter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
 from hangul_codec import TABLE, SYM_CODE, normalize
+import halfwidth
 
 _TSET = set(TABLE)
 _GA = re.compile(r"\{G\d\d\}")
+
+# 이름·지명을 일본어 읽기로 표기할지 (0 이면 한자 독음 유지)
+JP_NAMES = os.environ.get("NOBU2_JPNAMES", "1") != "0"
 
 
 def encodable(t):
@@ -113,12 +118,118 @@ def build_plan():
             skipped[off] = "unencodable"
             final[off] = None
 
-    return final, skipped, no_reloc, problems, by_off, es
+    # (d) 이름·지명을 일본어 읽기로 (반각 1바이트 인코딩 포함)
+    halfmap = apply_jp_names(final, by_off) if JP_NAMES else {}
+
+    return final, skipped, no_reloc, problems, by_off, es, halfmap
+
+
+def apply_jp_names(final, by_off):
+    """한자 독음으로 되어 있던 이름·지명을 일본어 읽기로 바꾸고
+       반각 1바이트 음절 배정표를 만든다.
+
+    고정 길이 필드(성 7바이트)에 `노부나가`(전각 8바이트)가 안 들어가므로
+    자주 쓰이는 음절을 1바이트 코드로 배정한다 (halfwidth.py 참고).
+    """
+    import names as NAMES
+
+    # 1) DB 필드 후보 읽기 (성은 뒤에 공백)
+    cand = {}
+    for off in final:
+        e = by_off[off]
+        if e["kind"] not in ("field", "inline"):
+            continue
+        r = NAMES.YOMI.get(e["jp"])
+        if r:
+            cand[off] = r + (" " if e["jp"] in NAMES.SURNAME_SET else "")
+
+    # 2) 본문(대사·열전) 속 독음 이름 치환
+    body_new = {}
+    for off, ko in final.items():
+        if ko is None or by_off[off]["kind"] == "field":
+            continue
+        nk = NAMES.apply_body(ko)
+        if nk != ko:
+            body_new[off] = nk
+
+    # 3) 음절 빈도 -> 반각 슬롯 배정
+    freq = Counter()
+    for t in list(cand.values()) + list(body_new.values()):
+        for ch in t:
+            if "가" <= ch <= "힣":
+                freq[ch] += 1
+    halfmap = halfwidth.build_map([s for s, _ in freq.most_common(len(halfwidth.FREE_CODES))])
+
+    def hcost(t):
+        return sum(1 if (ord(c) < 0x80 or c in halfmap) else 2 for c in t)
+
+    # 4) 용량에 맞으면 적용 (넘치면 성 뒤 공백을 빼고 재시도)
+    for off, t in cand.items():
+        e = by_off[off]
+        capn = e["blen"] + e["slack"] - 1
+        use = t
+        if hcost(use) > capn and e["jp"] in NAMES.SURNAME_SET:
+            use = t.rstrip()
+        if hcost(use) <= capn:
+            final[off] = use
+    for off, nk in body_new.items():
+        final[off] = nk
+
+    # 5) 창 넘침 정리 — 일본어 읽기는 한자 독음보다 길어 줄이 늘 수 있다.
+    #    원문 자체가 창 크기에 맞춰 문장 도중에 잘려 있으므로, 같은 방식으로 줄인다.
+    trim_to_window(final, by_off, halfmap)
+    return halfmap
+
+
+_FMT = re.compile(r"%[-0-9]*[sd]")
+
+
+def _lines(t, limit, adv_full, halfmap=None):
+    """게임의 자동 줄바꿈 규칙으로 줄 수 계산"""
+    t = _GA.sub("　", t)
+    t = _FMT.sub("　　　", t)
+    n, x = 1, 0
+    for ch in t:
+        if ch == "\n":
+            n += 1; x = 0; continue
+        w = 8 if ord(ch) < 0x80 else adv_full
+        if x + w > limit:
+            n += 1; x = 0
+        x += w
+    return n
+
+
+def trim_to_window(final, by_off, halfmap, advance=8):
+    """번역이 원문보다 줄이 늘어난 경우 원문 줄 수에 맞게 잘라낸다.
+
+    포맷 코드(%s·%d)가 있는 문자열은 인자 개수가 달라지면 위험하므로 건드리지 않는다.
+    """
+    trimmed = 0
+    for off, ko in list(final.items()):
+        if ko is None or _FMT.search(ko):
+            continue
+        jp = by_off[off]["jp"]
+        for limit in (216, 240):
+            lj = _lines(jp, limit, 12)
+            if _lines(ko, limit, advance, halfmap) <= lj:
+                continue
+            cut = ko
+            while cut and _lines(cut, limit, advance, halfmap) > lj:
+                # 낱말 경계에서 자르되, 안 되면 한 글자씩
+                sp = cut.rstrip().rfind(" ")
+                cut = cut[:sp] if sp > len(cut) * 0.5 else cut[:-1]
+            cut = cut.rstrip(" ,.、。")
+            if cut and cut != ko:
+                final[off] = cut
+                trimmed += 1
+            break
+    if trimmed:
+        print(f"창 넘침 정리(원문 줄 수에 맞춰 절단): {trimmed}건")
 
 
 if __name__ == "__main__":
-    final, skipped, no_reloc, problems, by_off, es = build_plan()
-    from collections import Counter
+    final, skipped, no_reloc, problems, by_off, es, halfmap = build_plan()
+    print("반각 음절 :", len(halfmap))
     print("주입 대상 :", sum(1 for v in final.values() if v is not None))
     print("원본 유지 :", sum(1 for v in final.values() if v is None))
     print("의도적 제외:", len(skipped), Counter(skipped.values()))

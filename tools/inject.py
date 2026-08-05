@@ -11,7 +11,12 @@ import paths
 from hangul_codec import Codec, TABLE, CLS, SYM_CODE, FREE_SLOTS, GAIJI0, enc_len
 from plan import build_plan
 from glyphs import GlyphMaker, pack18, patch_advance, ADV_PATCH_OFF, ADV_PATCH_ORIG
+import halfwidth
+import names as NAMES
 from collections import Counter
+
+# 이름·지명을 일본어 읽기로 표기할지 (0 이면 한자 독음 유지)
+JP_NAMES = os.environ.get("NOBU2_JPNAMES", "1") != "0"
 
 SRC = paths.rom_jp()
 DST = paths.rom_kr()
@@ -24,7 +29,8 @@ ROM_END = paths.ROM_SIZE
 ADVANCE = int(os.environ.get("NOBU2_ADVANCE", "8"))
 
 # ---- 주입 계획 (verify_all.py 와 동일한 판단을 쓰기 위해 plan.py 로 분리)
-final, skipped, NO_RELOC, problems, by_off, es = build_plan()
+#      이름의 일본어 읽기 치환과 반각 배정도 plan 이 결정한다.
+final, skipped, NO_RELOC, problems, by_off, es, halfmap = build_plan()
 
 nskip = Counter(skipped.values())
 print(f"overlap drops: {nskip.get('overlap', 0)}, unencodable(원본 유지): {nskip.get('unencodable', 0)}, "
@@ -35,6 +41,9 @@ if problems:
     json.dump(problems, open(paths.out('inject_problems.json'), "w", encoding="utf-8"), ensure_ascii=False)
 json.dump({hex(k): v for k, v in sorted(skipped.items())},
           open(paths.out('skipped.json'), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+if halfmap:
+    print(f"일본어 읽기 적용 · 반각 음절 {len(halfmap)}종")
 
 # ---- 음절 수집
 syls = Counter()
@@ -57,7 +66,9 @@ charmap = {}
 for s, slot in zip(top, hira_slots): charmap[s] = slot
 for s, slot in zip(rest, other_slots): charmap[s] = slot
 json.dump(charmap, open(paths.out('charmap.json'), "w",encoding="utf-8"), ensure_ascii=False, indent=0)
-codec = Codec(charmap)
+json.dump({k: hex(v) for k, v in halfmap.items()},
+          open(paths.out('halfmap.json'), "w", encoding="utf-8"), ensure_ascii=False, indent=0)
+codec = Codec(charmap, halfmap)
 
 # ---- ROM 준비 + 폰트 기록
 rom = bytearray(open(SRC, "rb").read())
@@ -91,7 +102,10 @@ if ADVANCE < 12:
     patch_advance(rom, ADVANCE)
     print(f"code patch: {ADV_PATCH_OFF:#x} {ADV_PATCH_ORIG} -> {ADVANCE}")
 
-print(f"font glyphs written: 한글 {nfont}, 기호 {nsym}, 외자 {ngai}")
+# 반각 슬롯에 한글 글리프 기록 (1바이트 이름용)
+nhalf = halfwidth.write_font(rom, halfmap, gm) if halfmap else 0
+
+print(f"font glyphs written: 한글 {nfont}, 기호 {nsym}, 외자 {ngai}, 반각한글 {nhalf}")
 
 # ---- 텍스트 기록
 free_ptr = FREE_BASE

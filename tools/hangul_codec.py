@@ -71,9 +71,11 @@ def build_charmap(syllables):
     return {s: FREE_SLOTS[k] for k, s in enumerate(syl)}
 
 class Codec:
-    def __init__(self, charmap):
-        self.charmap = charmap          # syllable -> slot idx
+    def __init__(self, charmap, halfmap=None):
+        self.charmap = charmap          # syllable -> slot idx (전각)
         self.enc2 = {s: TABLE[i] for s, i in charmap.items()}
+        # 반각 1바이트 음절 (고정 길이 이름 필드용). halfwidth.py 참고
+        self.half = dict(halfmap or {})
 
     def encode(self, text):
         out = bytearray()
@@ -91,6 +93,8 @@ class Codec:
             o = ord(ch)
             if o < 0x80:
                 out.append(o); continue
+            if ch in self.half:
+                out.append(self.half[ch]); continue
             if ch in self.enc2:
                 v = self.enc2[ch]
                 out += bytes([v >> 8, v & 0xFF]); continue

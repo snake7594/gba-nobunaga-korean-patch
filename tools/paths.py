@@ -28,7 +28,7 @@ PATCH_DIR = os.path.join(ROOT, "patch")
 ROM_DIR = os.path.join(ROOT, "rom")
 
 MD5_JP = "2d1ceffbc8c34e3101ab91ea49f43a44"
-MD5_KR = "064ca6d25a43afe12ba0ac58a76712bb"
+MD5_KR = "618c2ac80e903751ebc63752cbed6b5f"
 
 # 롬 내부 주소 (docs/ROM구조.md 참고)
 FONT_BASE = 0x305274      # 12x12 폰트, 글리프당 18바이트
