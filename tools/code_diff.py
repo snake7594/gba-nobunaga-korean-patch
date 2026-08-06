@@ -19,11 +19,8 @@ CODE_PATCH = set(ADV_SITES_FULL) | set(ADV_SITES_HALF)
 GFX = set()
 for _s, _e, _base in logo_patch.SEGMENTS:
     GFX.update(range(_base, _base + (_e - _s)*64))
-for _a in imgtext.ARRAYS:
-    _offs = _a.get("offs") or [_a["base"] + k*_a["stride"] for k in range(_a["n"])]
-    _nb = (_a["w"]*16)//64*32
-    for _k in _a["items"]:
-        GFX.update(range(_offs[_k], _offs[_k] + _nb))
+for _s, _e in imgtext.ranges():
+    GFX.update(range(_s, _e))
 
 intended = set()          # 포인터 슬롯 주소 (4바이트)
 str_span = set()          # 문자열 본문이 차지하는 바이트

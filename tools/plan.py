@@ -120,12 +120,7 @@ def build_plan():
     # (b-2) 이미지 라벨(스프라이트 타일) 안을 문자열로 오인한 항목 제외.
     #       그림 데이터라 텍스트를 써 넣으면 버튼·상태창 그림이 깨진다.
     import imgtext
-    gfx = []
-    for arr in imgtext.ARRAYS:
-        offs = arr.get("offs") or [arr["base"] + k*arr["stride"]
-                                   for k in range(arr["n"])]
-        nb = (arr["w"]*16)//64*32
-        gfx += [(offs[k], offs[k]+nb) for k in arr["items"]]
+    gfx = imgtext.ranges()
     for off in list(final):
         e = by_off[off]
         a, b = off, off + e["blen"] + e["slack"]

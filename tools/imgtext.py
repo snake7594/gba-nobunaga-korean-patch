@@ -2,14 +2,17 @@
 """이미지로 그려진 일본어 UI 라벨을 한글로 교체한다
 
 대상
-    커맨드 버튼, 상태창 항목명, 합전 명령 — 전부 32×16 4bpp OBJ 스프라이트다.
-    OBJ 1D 매핑이라 타일 8개(가로4×세로2)가 순서대로 나열되고, 배열마다
-    일정한 stride 로 이어진다.
+    커맨드 버튼, 합전 명령, 무장 능력치, 제목 라벨, 그리고 지도 화면 상단 상태창.
+    전부 4bpp OBJ 스프라이트이고 OBJ 1D 매핑이라 타일이 순서대로 나열된다.
+    폭은 24/28/32/64px 로 제각각이고, 배열마다 일정한 stride 로 이어진다.
 
-색 구조
-    배경  : 세로 그라데이션을 2색 체커 디더로 표현. 색은 y 와 (x+y)&1 로 정해진다.
-    글자  : 어두운 획색 A + 오른쪽아래 1px 하이라이트 B (음각 효과).
-    A/B 와 배경색은 계열(내정/군사/외교/상태창…)마다 달라 자동으로 판별한다.
+두 가지 만듦새
+    액자형 (버튼·합전 명령·능력치·제목)
+        배경 : 세로 그라데이션을 2색 체커 디더로 표현. 색은 y 와 (x+y)&1 로 정해진다.
+        글자 : 어두운 획색 A + 오른쪽아래 1px 하이라이트 B (음각 효과).
+    상태창형 (PANEL — 지도 화면 상단)
+        배경 : 디더 없이 줄마다 단색인 세로 그라데이션.
+        글자 : 흰 획 + 1px 외곽선. 외곽선 색은 그 줄 배경의 그림자색이라 줄마다 다르다.
 
 빈 판 복원
     한 라벨 안에서는 획 픽셀이 배경보다 많을 수 있어 단순 최빈값으로는 글자가
@@ -275,6 +278,97 @@ def paint(a, t, text, painter, inset, cell=12):
     return out
 
 
+# ---------------- 지도 화면 상단 상태창 (외곽선 방식) ----------------
+# 이 판만 만듦새가 다르다.
+#   · 폭 24px 중 왼쪽 2px 는 투명, 실제로 그려지는 곳은 x=2~23
+#   · 배경은 디더 없이 '줄마다 단색'인 세로 그라데이션
+#   · 글자는 흰 획 + 1px 외곽선. 외곽선 색은 그 줄 배경의 그림자색이라 줄마다 다르다
+PANEL = dict(base=0x23AD04, stride=0xE0, n=14, w=24, lo=2, hi=23,
+             ink=2, box=(3, 22, 2, 13))
+PANEL_TEXT = ["금", "쌀", "민심", "석고", "치수", "상업", "문화",
+              "기술", "수비", "병수", "철포", "무장", "훈련", "사기"]
+
+
+def _longest_run(vals):
+    """한 줄에서 같은 색이 가장 길게 이어지는 구간의 색"""
+    best, cur, n = (0, vals[0]), vals[0], 0
+    for v in vals:
+        n = n+1 if v == cur else 1
+        cur = v
+        if n > best[0]:
+            best = (n, v)
+    return best[1]
+
+
+def panel_rows(blocks, lo, hi, ink):
+    """줄마다 (배경색, 외곽선색) 을 뽑는다
+
+    이 판은 폭이 22px 뿐이라 획 픽셀이 배경보다 많은 줄이 흔하다. 최빈값도,
+    '가장 긴 연속 구간'도 획에 밀린다. 그래서 배경은 글자가 거의 닿지 않는
+    양끝 두 칸만 보고 라벨 전체로 다수결한다. (`技術` 처럼 끝까지 닿는 글자가
+    몇 개 있어도 14장 중 다수는 배경이라 흔들리지 않는다)"""
+    st = np.stack(blocks)
+    edge = [lo, lo+1, hi-1, hi]
+    bg, sh = [], []
+    for y in range(H):
+        b = _mode(st[:, y, edge].reshape(-1).tolist())
+        bg.append(b)
+        vals = st[:, y, lo:hi+1].reshape(-1).tolist()
+        rest = [v for v in vals if v != b and v != ink]
+        sh.append(_mode(rest, b))
+    return bg, sh
+
+
+def panel_patch(rom, painter, cfg=PANEL, texts=None):
+    texts = PANEL_TEXT if texts is None else texts
+    offs = [cfg["base"] + k*cfg["stride"] for k in range(cfg["n"])]
+    blocks = [read(rom, o, cfg["w"]) for o in offs]
+    bg, sh = panel_rows(blocks, cfg["lo"], cfg["hi"], cfg["ink"])
+    x0, x1, y0, y1 = cfg["box"]
+    n = 0
+    for k, text in enumerate(texts):
+        if not text:
+            continue
+        body = painter.fit(text, x1 - x0 - 1)      # 좌우 외곽선 1px 씩 자리를 둔다
+        gh, gw = body.shape
+        ox = x0 + 1 + max(0, ((x1-x0-1) - gw)//2)
+        oy = y0 + 1 + max(0, ((y1-y0-1) - gh)//2)
+        out = np.zeros((H, cfg["w"]), dtype=np.uint8)
+        for y in range(H):
+            out[y, :] = blocks[k][y, :]
+            out[y, cfg["lo"]:cfg["hi"]+1] = bg[y]
+        for y in range(gh):                         # 외곽선 먼저 (8방향 1px)
+            for x in range(gw):
+                if not body[y, x]:
+                    continue
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        py, px = oy+y+dy, ox+x+dx
+                        if y0 <= py <= y1+1 and x0 <= px <= x1:
+                            out[py, px] = sh[py]
+        for y in range(gh):                         # 흰 획을 위에
+            for x in range(gw):
+                if body[y, x]:
+                    out[oy+y, ox+x] = cfg["ink"]
+        write(rom, offs[k], out)
+        n += 1
+    return n
+
+
+def ranges():
+    """이 도구가 건드리는 롬 바이트 구간 [(시작, 끝)] — plan.py·code_diff.py 가 쓴다"""
+    out = []
+    for arr in ARRAYS:
+        offs = arr.get("offs") or [arr["base"] + k*arr["stride"]
+                                   for k in range(arr["n"])]
+        nb = (arr["w"]*16)//64*32
+        out += [(offs[k], offs[k]+nb) for k in arr["items"]]
+    nb = (PANEL["w"]*16)//64*32
+    out += [(PANEL["base"] + k*PANEL["stride"],
+             PANEL["base"] + k*PANEL["stride"] + nb) for k in range(PANEL["n"])]
+    return out
+
+
 # ---------------- 진입점 ----------------
 def patch(rom, cell=12, arrays=None):
     """rom(bytearray)의 이미지 라벨을 한글로 교체. 바꾼 개수를 돌려준다."""
@@ -323,6 +417,7 @@ def patch(rom, cell=12, arrays=None):
                 continue
             write(rom, offs[k], out)
             done += 1
+    done += panel_patch(rom, p)
     return done
 
 
@@ -331,7 +426,7 @@ def main():
     rom = bytearray(open(src, "rb").read())
     n = patch(rom)
     open(paths.rom_kr(), "wb").write(rom)
-    total = sum(len(a["items"]) for a in ARRAYS)
+    total = sum(len(a["items"]) for a in ARRAYS) + len([t for t in PANEL_TEXT if t])
     print(f"이미지 라벨 한글화: {n}/{total}개")
     print("written:", paths.rom_kr())
 
